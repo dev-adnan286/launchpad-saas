@@ -1,0 +1,31 @@
+{
+  "name": "launchpad-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LaunchPad - multi-tenant B2B project-management SaaS (NestJS + Next.js monorepo)",
+  "license": "MIT",
+  "author": "Adnan",
+  "engines": {
+    "node": ">=20",
+    "npm": ">=10"
+  },
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "test:e2e": "npm run test:e2e --workspace=@launchpad/api",
+    "format": "prettier --write \"apps/**/*.{ts,tsx,js,mjs,json,md,css}\" \"*.{json,md,yml}\"",
+    "format:check": "prettier --check \"apps/**/*.{ts,tsx,js,mjs,json,md,css}\" \"*.{json,md,yml}\"",
+    "prisma:generate": "npm run prisma:generate --workspace=@launchpad/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@launchpad/api",
+    "prisma:seed": "npm run prisma:seed --workspace=@launchpad/api"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3"
+  }
+}

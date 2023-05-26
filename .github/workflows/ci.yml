@@ -1,0 +1,103 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: 22
+
+jobs:
+  api:
+    name: API - lint, typecheck, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate --workspace=@launchpad/api
+      - run: npx prisma validate --schema apps/api/prisma/schema.prisma
+      - run: npm run lint --workspace=@launchpad/api
+      - run: npm run build --workspace=@launchpad/api
+      - run: npm run test --workspace=@launchpad/api -- --ci
+
+  web:
+    name: Web - lint, typecheck, unit tests, build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run lint --workspace=@launchpad/web
+      - run: npm run typecheck --workspace=@launchpad/web
+      - run: npm run test --workspace=@launchpad/web
+      - run: npm run build --workspace=@launchpad/web
+
+  e2e:
+    name: API - end-to-end (Postgres + Redis)
+    runs-on: ubuntu-latest
+    needs: [api]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: launchpad
+          POSTGRES_PASSWORD: launchpad
+          POSTGRES_DB: launchpad_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U launchpad"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://launchpad:launchpad@localhost:5432/launchpad_test?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_ACCESS_SECRET: ci-access-secret-for-tests-only-0123456789
+      JWT_REFRESH_SECRET: ci-refresh-secret-for-tests-only-0123456789
+      JWT_ACCESS_TTL: 15m
+      JWT_REFRESH_TTL: 7d
+      CORS_ORIGIN: http://localhost:3000
+      WEB_URL: http://localhost:3000
+      BILLING_WEBHOOK_SECRET: ci-webhook-secret
+      MAIL_FROM: LaunchPad <no-reply@launchpad.local>
+      PORT: 4000
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci
+      - run: npm run prisma:generate --workspace=@launchpad/api
+      - name: Apply migrations
+        run: npx prisma migrate deploy --schema apps/api/prisma/schema.prisma
+      - name: Seed plans
+        run: npm run prisma:seed --workspace=@launchpad/api
+      - name: Run e2e tests
+        run: npm run test:e2e --workspace=@launchpad/api
